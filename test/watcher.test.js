@@ -85,6 +85,43 @@ test("does not collapse a short approval and its result into one update", async 
   }
 });
 
+test("ignores internal subagent journals", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codex-attention-"));
+  const day = join(root, "2026", "07", "20");
+  const journal = join(day, "rollout-2026-07-20T00-00-00-019f82ab-358f-7030-9cea-d0c459771b84.jsonl");
+  await mkdir(day, { recursive: true });
+  await writeFile(
+    journal,
+    [
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: "session_meta",
+        payload: { thread_source: "subagent", source: { subagent: { other: "guardian" } } }
+      }),
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: "event_msg",
+        payload: { type: "task_started" }
+      }),
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: "event_msg",
+        payload: { type: "task_complete" }
+      })
+    ].join("\n") + "\n"
+  );
+
+  const watcher = new CodexJournalWatcher(root);
+  try {
+    await watcher.start();
+    assert.equal(watcher.states.size, 0);
+    assert.equal(watcher.ignoredPaths.has(journal), true);
+  } finally {
+    watcher.stop();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function waitForStatus(watcher, expected, timeoutMs, requireTransition = false) {
   return new Promise((resolve, reject) => {
     let unsubscribe = () => {};

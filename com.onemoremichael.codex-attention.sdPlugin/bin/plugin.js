@@ -15,7 +15,7 @@ import { cwd } from 'node:process';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
-import { open, readdir, stat } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, stat, readFile, open } from 'node:fs/promises';
 
 /******************************************************************************
 Copyright (c) Microsoft Corporation.
@@ -9232,12 +9232,117 @@ function threadIdFromPath(path) {
     return path.match(/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\.jsonl$/i)?.[1] ?? null;
 }
 
+class ClaudeStateWatcher {
+    root;
+    states = new Map();
+    modified = new Map();
+    listeners = new Set();
+    watcher = null;
+    pollTimer = null;
+    constructor(root) {
+        this.root = root;
+    }
+    async start() {
+        await mkdir(this.root, { recursive: true });
+        await this.scan(false);
+        this.watcher = watch(this.root, (_event, filename) => {
+            if (filename?.endsWith(".json"))
+                void this.scan(true);
+        });
+        this.pollTimer = setInterval(() => void this.scan(true), 500);
+    }
+    stop() {
+        this.watcher?.close();
+        this.watcher = null;
+        if (this.pollTimer)
+            clearInterval(this.pollTimer);
+        this.pollTimer = null;
+    }
+    subscribe(listener) {
+        this.listeners.add(listener);
+        listener(this.current());
+        return () => this.listeners.delete(listener);
+    }
+    async acknowledge(sessionId) {
+        const state = this.states.get(sessionId);
+        if (!state || (state.status !== "ready" && state.status !== "error"))
+            return;
+        const updatedAt = Date.now();
+        const next = { ...state, status: "idle", updatedAt };
+        this.states.set(sessionId, next);
+        await writeFile(state.path, `${JSON.stringify({
+            version: 1,
+            sessionId,
+            status: "idle",
+            updatedAt,
+            cwd: state.cwd,
+            transcriptPath: state.transcriptPath
+        })}\n`, "utf8");
+        this.emit();
+    }
+    current() {
+        return highestPriority(this.states.values());
+    }
+    emit() {
+        const state = this.current();
+        for (const listener of this.listeners)
+            listener(state);
+    }
+    async scan(live) {
+        let names;
+        try {
+            names = (await readdir(this.root)).filter((name) => name.endsWith(".json"));
+        }
+        catch {
+            return;
+        }
+        let changed = false;
+        await Promise.all(names.map(async (name) => {
+            const path = join(this.root, name);
+            try {
+                const info = await stat(path);
+                if (this.modified.get(path) === info.mtimeMs)
+                    return;
+                const record = JSON.parse(await readFile(path, "utf8"));
+                if (!isClaudeState(record))
+                    return;
+                let status = record.status;
+                const isStale = Date.now() - record.updatedAt > 6 * 60 * 60 * 1000;
+                if (!live && (status === "ready" || status === "error" || isStale))
+                    status = "idle";
+                this.modified.set(path, info.mtimeMs);
+                this.states.set(record.sessionId, {
+                    id: record.sessionId,
+                    path,
+                    status,
+                    updatedAt: record.updatedAt,
+                    cwd: record.cwd,
+                    transcriptPath: record.transcriptPath
+                });
+                changed = true;
+            }
+            catch {
+                // A hook may be replacing the file while it is scanned. The next
+                // poll retries without interrupting the Stream Deck plugin.
+            }
+        }));
+        if (changed)
+            this.emit();
+    }
+}
+function isClaudeState(record) {
+    return (typeof record.sessionId === "string" &&
+        typeof record.updatedAt === "number" &&
+        ["idle", "working", "ready", "attention", "error"].includes(record.status ?? ""));
+}
+
 class CodexJournalWatcher {
     root;
     states = new Map();
     offsets = new Map();
     partialLines = new Map();
     listeners = new Set();
+    ignoredPaths = new Set();
     attentionObservedAt = new Map();
     watcher = null;
     processing = new Map();
@@ -9351,6 +9456,15 @@ class CodexJournalWatcher {
                     continue;
                 try {
                     const record = JSON.parse(line);
+                    if (record.type === "session_meta" && isSubagentSession(record.payload)) {
+                        this.ignoredPaths.add(path);
+                        const removed = this.states.delete(threadId);
+                        if (removed && live)
+                            this.emit();
+                        return;
+                    }
+                    if (this.ignoredPaths.has(path))
+                        return;
                     const status = statusFromRecord(record);
                     if (!status)
                         continue;
@@ -9389,6 +9503,16 @@ class CodexJournalWatcher {
         }
     }
 }
+function isSubagentSession(payload) {
+    if (!payload || typeof payload !== "object")
+        return false;
+    const session = payload;
+    if (session.thread_source === "subagent")
+        return true;
+    return (typeof session.source === "object" &&
+        session.source !== null &&
+        "subagent" in session.source);
+}
 function delay(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -9419,9 +9543,12 @@ async function collectRecentJournals(root, limit) {
         .map((item) => item.path);
 }
 
-const ACTION_UUID = "com.onemoremichael.codex-attention.priority";
+const CODEX_ACTION_UUID = "com.onemoremichael.codex-attention.priority";
+const CLAUDE_ACTION_UUID = "com.onemoremichael.codex-attention.claude-priority";
 const journalWatcher = new CodexJournalWatcher(join(homedir(), ".codex", "sessions"));
+const claudeWatcher = new ClaudeStateWatcher(join(homedir(), ".claude", "stream-deck", "state"));
 const CODEX_ICON = readFileSync(new URL("../imgs/action-icon.png", import.meta.url)).toString("base64");
+const CLAUDE_ICON = readFileSync(new URL("../imgs/claude-action-icon.png", import.meta.url)).toString("base64");
 const COLORS = {
     idle: { glow: "#E7E7E7", label: "IDLE" },
     working: { glow: "#3B82F6", label: "WORKING" },
@@ -9430,7 +9557,7 @@ const COLORS = {
     error: { glow: "#EF4444", label: "ERROR" }
 };
 let CodexPriorityAction = (() => {
-    let _classDecorators = [action({ UUID: ACTION_UUID })];
+    let _classDecorators = [action({ UUID: CODEX_ACTION_UUID })];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
@@ -9485,13 +9612,72 @@ let CodexPriorityAction = (() => {
         }
         async render(target) {
             const status = this.state?.status ?? "idle";
-            await target.setImage(makeKeySvg(status, this.pulseBright));
+            await target.setImage(makeKeySvg(status, this.pulseBright, CODEX_ICON));
             await target.setTitle("");
         }
     });
     return _classThis;
 })();
-function makeKeySvg(status, bright) {
+let ClaudePriorityAction = (() => {
+    let _classDecorators = [action({ UUID: CLAUDE_ACTION_UUID })];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    let _classSuper = SingletonAction;
+    (class extends _classSuper {
+        static { _classThis = this; }
+        static {
+            const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
+            __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+            _classThis = _classDescriptor.value;
+            if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+            __runInitializers(_classThis, _classExtraInitializers);
+        }
+        state = null;
+        visible = new Map();
+        pulseBright = true;
+        timer;
+        constructor() {
+            super();
+            claudeWatcher.subscribe((state) => {
+                this.state = state;
+                void this.renderAll();
+            });
+            this.timer = setInterval(() => {
+                this.pulseBright = !this.pulseBright;
+                if (this.state?.status !== "idle")
+                    void this.renderAll();
+            }, 650);
+        }
+        async onWillAppear(ev) {
+            this.visible.set(ev.action.id, ev.action);
+            await this.render(ev.action);
+        }
+        onWillDisappear(ev) {
+            this.visible.delete(ev.action.id);
+        }
+        async onKeyDown(ev) {
+            execFile("/usr/bin/open", ["-a", "Claude"], (error) => {
+                if (error)
+                    void ev.action.showAlert();
+                else
+                    void ev.action.showOk();
+            });
+            if (this.state)
+                await claudeWatcher.acknowledge(this.state.id);
+        }
+        async renderAll() {
+            await Promise.all([...this.visible.values()].map((item) => this.render(item)));
+        }
+        async render(target) {
+            const status = this.state?.status ?? "idle";
+            await target.setImage(makeKeySvg(status, this.pulseBright, CLAUDE_ICON));
+            await target.setTitle("");
+        }
+    });
+    return _classThis;
+})();
+function makeKeySvg(status, bright, icon) {
     const { glow, label } = COLORS[status];
     const opacity = status === "idle" ? 0.22 : bright ? 0.95 : 0.42;
     const ring = status === "idle" ? "#777777" : glow;
@@ -9505,12 +9691,13 @@ function makeKeySvg(status, bright) {
     <rect width="144" height="144" rx="22" fill="#0B0B0C"/>
     <circle cx="72" cy="61" r="38" fill="${glow}" opacity="${opacity}" filter="url(#g)"/>
     <circle cx="72" cy="61" r="38" fill="#111214" stroke="${ring}" stroke-width="4"/>
-    <image href="data:image/png;base64,${CODEX_ICON}" x="37" y="26" width="70" height="70"/>
+    <image href="data:image/png;base64,${icon}" x="37" y="26" width="70" height="70"/>
     <text x="72" y="124" text-anchor="middle" fill="#F7F7F7" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="700">${label}</text>
   </svg>`;
     return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 streamDeck.actions.registerAction(new CodexPriorityAction());
+streamDeck.actions.registerAction(new ClaudePriorityAction());
 // Stream Deck expects plugins to connect promptly. Start the journal scan in
 // the background so a large Codex history cannot trigger its startup timeout.
 void streamDeck.connect().catch((error) => {
@@ -9518,5 +9705,8 @@ void streamDeck.connect().catch((error) => {
 });
 void journalWatcher.start().catch((error) => {
     streamDeck.logger.error(`Codex watcher failed: ${String(error)}`);
+});
+void claudeWatcher.start().catch((error) => {
+    streamDeck.logger.error(`Claude watcher failed: ${String(error)}`);
 });
 //# sourceMappingURL=plugin.js.map

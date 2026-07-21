@@ -5,11 +5,11 @@
   "UUID": "com.onemoremichael.codex-attention",
   "CodePath": "bin/plugin.js",
   "Name": "Codex Attention",
-  "Description": "A Codex priority key that pulses when a local task is working, ready, waiting for input, or blocked.",
+  "Description": "Priority keys for local Codex and Claude Code tasks.",
   "Icon": "imgs/plugin-icon",
   "Category": "Codex Attention",
   "CategoryIcon": "imgs/plugin-icon",
-  "Version": "0.1.0.0",
+  "Version": "0.2.0.0",
   "Software": {
     "MinimumVersion": "7.1"
   },
@@ -31,6 +31,18 @@
       "States": [
         {
           "Image": "imgs/action-icon",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "UUID": "com.onemoremichael.codex-attention.claude-priority",
+      "Name": "Claude Code Priority",
+      "Tooltip": "Show Claude Code status and open Claude Desktop.",
+      "Icon": "imgs/claude-action-icon",
+      "States": [
+        {
+          "Image": "imgs/claude-action-icon",
           "TitleAlignment": "bottom"
         }
       ]

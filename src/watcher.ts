@@ -11,6 +11,7 @@ export class CodexJournalWatcher {
   readonly offsets = new Map<string, number>();
   readonly partialLines = new Map<string, string>();
   readonly listeners = new Set<Listener>();
+  readonly ignoredPaths = new Set<string>();
   private readonly attentionObservedAt = new Map<string, number>();
   private watcher: FSWatcher | null = null;
   private processing = new Map<string, Promise<void>>();
@@ -134,6 +135,14 @@ export class CodexJournalWatcher {
         if (!line) continue;
         try {
           const record = JSON.parse(line);
+          if (record.type === "session_meta" && isSubagentSession(record.payload)) {
+            this.ignoredPaths.add(path);
+            const removed = this.states.delete(threadId);
+            if (removed && live) this.emit();
+            return;
+          }
+          if (this.ignoredPaths.has(path)) return;
+
           const status = statusFromRecord(record);
           if (!status) continue;
 
@@ -167,6 +176,17 @@ export class CodexJournalWatcher {
       await file.close();
     }
   }
+}
+
+function isSubagentSession(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const session = payload as { thread_source?: unknown; source?: unknown };
+  if (session.thread_source === "subagent") return true;
+  return (
+    typeof session.source === "object" &&
+    session.source !== null &&
+    "subagent" in session.source
+  );
 }
 
 function delay(milliseconds: number): Promise<void> {

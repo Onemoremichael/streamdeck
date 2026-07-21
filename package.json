@@ -1,6 +1,6 @@
 {
   "name": "codex-attention-stream-deck",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,8 @@
     "test": "tsx --test test/*.test.js",
     "typecheck": "tsc --noEmit",
     "validate": "streamdeck validate com.onemoremichael.codex-attention.sdPlugin",
-    "pack": "streamdeck pack --force com.onemoremichael.codex-attention.sdPlugin"
+    "pack": "streamdeck pack --force com.onemoremichael.codex-attention.sdPlugin",
+    "install:claude-hooks": "node scripts/install-claude-hooks.mjs"
   },
   "dependencies": {
     "@elgato/streamdeck": "latest"
