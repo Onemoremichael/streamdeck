@@ -42,8 +42,8 @@ npm run pack
 
 Double-click `com.onemoremichael.codex-attention.streamDeckPlugin`, restart Stream Deck if prompted, then drag either reusable action onto as many keys as you want:
 
-- **Codex Attention → Codex Task**
-- **Codex Attention → Claude Task**
+- **Agent Attention → Codex Task**
+- **Agent Attention → Claude Task**
 
 For Claude Code Desktop, install the metadata-only lifecycle hooks once:
 

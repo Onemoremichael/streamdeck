@@ -4,12 +4,12 @@
   "Author": "Onemoremichael",
   "UUID": "com.onemoremichael.codex-attention",
   "CodePath": "bin/plugin.js",
-  "Name": "Codex Attention",
+  "Name": "Agent Attention",
   "Description": "Reusable live status keys for local Codex and Claude Code tasks.",
   "Icon": "imgs/plugin-icon",
-  "Category": "Codex Attention",
+  "Category": "Agent Attention",
   "CategoryIcon": "imgs/plugin-icon",
-  "Version": "0.5.0.0",
+  "Version": "0.5.1.0",
   "Software": {
     "MinimumVersion": "7.1"
   },
