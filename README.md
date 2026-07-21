@@ -117,4 +117,4 @@ npm run pack
 npm run install:claude-hooks
 ```
 
-The packaged `.streamDeckPlugin` file is written to the repository root and is intentionally ignored by Git. Source changes should include matching tests when an agent event shape changes.
+The generated `sdPlugin/bin/` runtime and packaged `.streamDeckPlugin` file are intentionally ignored by Git. Run `npm run build` before validation, packaging, or linking a fresh checkout. Source changes should include matching tests when an agent event shape changes.

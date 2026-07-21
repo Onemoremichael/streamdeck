@@ -2,5 +2,6 @@ node_modules/
 .DS_Store
 *.streamDeckPlugin
 *.log
+com.onemoremichael.codex-attention.sdPlugin/bin/
 com.onemoremichael.codex-attention.sdPlugin/logs/
 .codex-approval-test*
