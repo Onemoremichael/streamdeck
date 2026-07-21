@@ -31,8 +31,13 @@ const COLORS: Record<CodexStatus, { glow: string; label: string }> = {
   error: { glow: "#EF4444", label: "ERROR" }
 };
 
+type AssignmentSettings = {
+  lastTaskId?: string;
+};
+
 abstract class AgentSlotAction<T extends ThreadState> extends SingletonAction {
   private readonly visible = new Map<string, WillAppearEvent["action"]>();
+  private readonly persistedAssignments = new Map<string, string | undefined>();
   private pulseBright = true;
   private readonly timer: NodeJS.Timeout;
 
@@ -49,13 +54,23 @@ abstract class AgentSlotAction<T extends ThreadState> extends SingletonAction {
   }
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
+    const settings = await ev.action
+      .getSettings<AssignmentSettings>()
+      .catch((): AssignmentSettings => ({}));
     this.visible.set(ev.action.id, ev.action);
-    this.board.addSlot(ev.action.id);
+    this.persistedAssignments.set(ev.action.id, settings.lastTaskId);
+    this.board.addSlot(
+      ev.action.id,
+      settings.lastTaskId
+        ? ({ id: settings.lastTaskId, path: "", status: "idle", updatedAt: 0 } as T)
+        : undefined
+    );
     await this.render(ev.action);
   }
 
   override onWillDisappear(ev: WillDisappearEvent): void {
     this.visible.delete(ev.action.id);
+    this.persistedAssignments.delete(ev.action.id);
     this.board.removeSlot(ev.action.id);
   }
 
@@ -75,7 +90,13 @@ abstract class AgentSlotAction<T extends ThreadState> extends SingletonAction {
   }
 
   private async render(target: WillAppearEvent["action"]): Promise<void> {
-    const status = this.board.get(target.id)?.status ?? "idle";
+    const state = this.board.get(target.id);
+    const status = state?.status ?? "idle";
+    const persisted = this.persistedAssignments.get(target.id);
+    if (state?.id !== persisted) {
+      this.persistedAssignments.set(target.id, state?.id);
+      await target.setSettings<AssignmentSettings>(state ? { lastTaskId: state.id } : {});
+    }
     await target.setImage(makeKeySvg(status, this.pulseBright, this.icon));
     await target.setTitle("");
   }

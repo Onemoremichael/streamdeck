@@ -8,13 +8,13 @@ This is an unofficial personal integration and is not published or endorsed by A
 
 | Color | Label | Meaning |
 | --- | --- | --- |
-| White | `IDLE` | No unread task needs attention |
+| White | `IDLE` | No unread task needs attention; the key may retain its last chat shortcut |
 | Blue pulse | `WORKING` | An agent task is running |
 | Green pulse | `READY` | A task completed and is ready to review |
 | Amber pulse | `INPUT` | An agent is waiting for input or a permission decision |
 | Red pulse | `ERROR` | A task failed or was aborted |
 
-Each visible action copy becomes a task lane. Tasks keep stable physical keys while they remain among the most important tasks that fit on the available keys. When more tasks are active than keys exist, the visible set is chosen by error, input, ready, working, then recency. An urgent task displaces the least important visible task; extra keys show idle.
+Each visible action copy becomes a task lane. Tasks keep stable physical keys while they remain among the most important tasks that fit on the available keys. When a task returns to idle, its key remembers that chat and remains a shortcut to it across plugin and Stream Deck restarts. New active tasks use never-assigned keys first, then replace the oldest idle binding when necessary. When more tasks are active than keys exist, the visible set is chosen by error, input, ready, working, then recency.
 
 Recommended Stream Deck Mini layout:
 
@@ -64,7 +64,7 @@ npx streamdeck restart com.onemoremichael.codex-attention
 
 ## Codex behavior
 
-Pressing a Codex key opens the exact task displayed on that key in the signed ChatGPT/Codex desktop app through its `codex://threads/...` deep link. Pressing a ready or error key also acknowledges that notification and frees its slot for another task.
+Pressing a Codex key opens the exact task assigned to that key in the signed ChatGPT/Codex desktop app through its `codex://threads/...` deep link, including when the key is idle. Pressing a ready or error key acknowledges the notification while retaining the chat shortcut.
 
 The watcher follows recently modified Codex session journals and polls known journals every 500 ms to accommodate macOS file-event behavior. It recognizes:
 

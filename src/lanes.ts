@@ -16,9 +16,10 @@ export class StableLaneBoard<T extends ThreadState> {
     return this.lanes.get(slotId) ?? null;
   }
 
-  addSlot(slotId: string): void {
+  addSlot(slotId: string, previous?: T): void {
     if (this.slots.includes(slotId)) return;
     this.slots.push(slotId);
+    if (previous) this.lanes.set(slotId, previous);
     this.reconcile();
   }
 
@@ -42,6 +43,7 @@ export class StableLaneBoard<T extends ThreadState> {
   }
 
   private reconcile(): void {
+    const stateById = new Map(this.states.map((state) => [state.id, state]));
     const candidates = this.states
       .filter((state) => state.status !== "idle")
       .sort(compareStates)
@@ -60,10 +62,23 @@ export class StableLaneBoard<T extends ThreadState> {
 
     for (const state of candidates) {
       if (assigned.has(state.id)) continue;
-      const free = this.slots.find((slotId) => !next.has(slotId));
+      const free = this.slots
+        .filter((slotId) => !next.has(slotId))
+        .sort((a, b) => assignmentAge(this.lanes.get(a)) - assignmentAge(this.lanes.get(b)))[0];
       if (!free) break;
       next.set(free, state);
       assigned.add(state.id);
+    }
+
+    // An idle task is still useful: its key acts as a shortcut back to the
+    // last chat handled there. Keep it until an active task needs the lane.
+    for (const slotId of this.slots) {
+      if (next.has(slotId)) continue;
+      const current = this.lanes.get(slotId);
+      if (!current || assigned.has(current.id)) continue;
+      const latest = stateById.get(current.id) ?? current;
+      next.set(slotId, latest);
+      assigned.add(latest.id);
     }
 
     if (sameAssignments(next, this.lanes, this.slots)) return;
@@ -75,6 +90,10 @@ export class StableLaneBoard<T extends ThreadState> {
 
 function compareStates(a: ThreadState, b: ThreadState): number {
   return STATUS_PRIORITY[b.status] - STATUS_PRIORITY[a.status] || b.updatedAt - a.updatedAt;
+}
+
+function assignmentAge(state: ThreadState | undefined): number {
+  return state?.updatedAt ?? Number.NEGATIVE_INFINITY;
 }
 
 function sameAssignments<T extends ThreadState>(

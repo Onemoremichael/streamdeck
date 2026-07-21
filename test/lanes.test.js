@@ -50,6 +50,44 @@ test("keeps selected tasks on stable keys when their priority changes", () => {
   );
 });
 
+test("retains the last task on its key after it becomes idle", () => {
+  const board = new StableLaneBoard();
+  board.addSlot("key-1");
+  board.update([state("chat-a", "working", 1)]);
+  board.update([state("chat-a", "idle", 2)]);
+
+  assert.equal(board.get("key-1")?.id, "chat-a");
+  assert.equal(board.get("key-1")?.status, "idle");
+});
+
+test("restores a persisted idle assignment when a key appears", () => {
+  const board = new StableLaneBoard();
+  board.addSlot("key-1", state("saved-chat", "idle", 0));
+
+  assert.equal(board.get("key-1")?.id, "saved-chat");
+  assert.equal(board.get("key-1")?.status, "idle");
+});
+
+test("uses empty keys before replacing retained idle assignments", () => {
+  const board = new StableLaneBoard();
+  board.addSlot("key-1", state("saved-chat", "idle", 10));
+  board.addSlot("key-2");
+  board.update([state("new-chat", "working", 20)]);
+
+  assert.equal(board.get("key-1")?.id, "saved-chat");
+  assert.equal(board.get("key-2")?.id, "new-chat");
+});
+
+test("replaces the oldest idle assignment when every key has history", () => {
+  const board = new StableLaneBoard();
+  board.addSlot("key-1", state("older-chat", "idle", 10));
+  board.addSlot("key-2", state("newer-chat", "idle", 20));
+  board.update([state("active-chat", "working", 30)]);
+
+  assert.equal(board.get("key-1")?.id, "active-chat");
+  assert.equal(board.get("key-2")?.id, "newer-chat");
+});
+
 test("adding and removing keys rebalances visible tasks", () => {
   const board = new StableLaneBoard();
   board.addSlot("key-1");
