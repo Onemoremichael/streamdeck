@@ -12,6 +12,7 @@ export class CodexJournalWatcher {
   readonly partialLines = new Map<string, string>();
   readonly listeners = new Set<Listener>();
   readonly ignoredPaths = new Set<string>();
+  readonly autoReviewedPaths = new Set<string>();
   private readonly attentionObservedAt = new Map<string, number>();
   private watcher: FSWatcher | null = null;
   private processing = new Map<string, Promise<void>>();
@@ -143,7 +144,17 @@ export class CodexJournalWatcher {
           }
           if (this.ignoredPaths.has(path)) return;
 
-          const status = statusFromRecord(record);
+          if (record.type === "turn_context") {
+            if (record.payload?.approvals_reviewer === "auto_review") {
+              this.autoReviewedPaths.add(path);
+            } else {
+              this.autoReviewedPaths.delete(path);
+            }
+          }
+
+          const status = statusFromRecord(record, {
+            autoReviewEscalations: this.autoReviewedPaths.has(path)
+          });
           if (!status) continue;
 
           // A poll can receive both an approval request and its result in the

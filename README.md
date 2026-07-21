@@ -74,6 +74,8 @@ The watcher follows recently modified Codex session journals and polls known jou
 
 Internal guardian and other subagent journals are excluded so their completion cannot mask a user task or open a non-user-facing thread.
 
+Escalated tool calls handled by Codex's automatic approval reviewer remain `WORKING`. The key changes to `INPUT` only for approval paths that can actually require the user, preventing brief amber flashes during ordinary thinking and tool execution.
+
 Permission input is held on the key for at least one second, so a short request and its result cannot be collapsed into a single polling update.
 
 Codex journal formats are internal and may change. The regression tests include the currently observed permission-card and lifecycle formats so compatibility failures are easier to identify.

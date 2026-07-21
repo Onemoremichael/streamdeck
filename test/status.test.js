@@ -46,6 +46,37 @@ test("does not mistake ordinary exec calls for approvals", () => {
   );
 });
 
+test("keeps auto-reviewed escalations working while preserving explicit permission requests", () => {
+  assert.equal(
+    statusFromRecord(
+      {
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call",
+          name: "exec",
+          input: 'tools.exec_command({cmd:"git push",sandbox_permissions:"require_escalated"})'
+        }
+      },
+      { autoReviewEscalations: true }
+    ),
+    null
+  );
+  assert.equal(
+    statusFromRecord(
+      {
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call",
+          name: "exec",
+          input: 'tools.request_permissions({permissions:{file_system:{write:["/tmp/test"]}}})'
+        }
+      },
+      { autoReviewEscalations: true }
+    ),
+    "attention"
+  );
+});
+
 test("chooses urgency first and recency second", () => {
   const winner = highestPriority([
     { id: "a", path: "a", status: "working", updatedAt: 20 },

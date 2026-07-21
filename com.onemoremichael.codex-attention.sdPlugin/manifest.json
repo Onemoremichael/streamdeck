@@ -9,7 +9,7 @@
   "Icon": "imgs/plugin-icon",
   "Category": "Codex Attention",
   "CategoryIcon": "imgs/plugin-icon",
-  "Version": "0.3.0.0",
+  "Version": "0.3.1.0",
   "Software": {
     "MinimumVersion": "7.1"
   },

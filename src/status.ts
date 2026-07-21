@@ -26,7 +26,14 @@ type JournalRecord = {
   };
 };
 
-export function statusFromRecord(record: JournalRecord): CodexStatus | null {
+type StatusOptions = {
+  autoReviewEscalations?: boolean;
+};
+
+export function statusFromRecord(
+  record: JournalRecord,
+  options: StatusOptions = {}
+): CodexStatus | null {
   const outer = record.type ?? "";
   const type = record.payload?.type ?? "";
   const name = record.payload?.name ?? "";
@@ -39,7 +46,7 @@ export function statusFromRecord(record: JournalRecord): CodexStatus | null {
     type === "elicitation_request" ||
     name === "request_user_input" ||
     name.endsWith("request_user_input") ||
-    isPermissionRequestCall(type, name, input)
+    isPermissionRequestCall(type, name, input, options.autoReviewEscalations ?? false)
   ) {
     return "attention";
   }
@@ -59,13 +66,19 @@ export function statusFromRecord(record: JournalRecord): CodexStatus | null {
   return null;
 }
 
-function isPermissionRequestCall(type: string, name: string, input: unknown): boolean {
+function isPermissionRequestCall(
+  type: string,
+  name: string,
+  input: unknown,
+  autoReviewEscalations: boolean
+): boolean {
   if (type !== "custom_tool_call" || name !== "exec") return false;
 
   const serialized = typeof input === "string" ? input : JSON.stringify(input ?? {});
   return (
     /\btools\.request_permissions\s*\(/.test(serialized) ||
-    /["']?sandbox_permissions["']?\s*:\s*["']require_escalated["']/.test(serialized)
+    (!autoReviewEscalations &&
+      /["']?sandbox_permissions["']?\s*:\s*["']require_escalated["']/.test(serialized))
   );
 }
 

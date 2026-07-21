@@ -122,6 +122,68 @@ test("ignores internal subagent journals", async () => {
   }
 });
 
+test("does not emit attention for escalations handled by auto review", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codex-attention-"));
+  const day = join(root, "2026", "07", "20");
+  const journal = join(day, "rollout-2026-07-20T00-00-00-019f8267-45b4-7352-9309-119b046ca40f.jsonl");
+  await mkdir(day, { recursive: true });
+  await writeFile(
+    journal,
+    [
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: "turn_context",
+        payload: { approvals_reviewer: "auto_review" }
+      }),
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: "event_msg",
+        payload: { type: "task_started" }
+      })
+    ].join("\n") + "\n"
+  );
+
+  const watcher = new CodexJournalWatcher(root);
+  const observed = [];
+  let unsubscribe = () => {};
+  try {
+    await watcher.start();
+    unsubscribe = watcher.subscribe((state) => {
+      if (state) observed.push(state.status);
+    });
+
+    const callId = "call_auto_reviewed";
+    await appendFile(
+      journal,
+      [
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call",
+            name: "exec",
+            call_id: callId,
+            input: 'tools.exec_command({cmd:"git push",sandbox_permissions:"require_escalated"})'
+          }
+        }),
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          type: "response_item",
+          payload: { type: "custom_tool_call_output", call_id: callId }
+        })
+      ].join("\n") + "\n"
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    assert.equal(observed.includes("attention"), false);
+    assert.equal(watcher.autoReviewedPaths.has(journal), true);
+  } finally {
+    unsubscribe();
+    watcher.stop();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function waitForStatus(watcher, expected, timeoutMs, requireTransition = false) {
   return new Promise((resolve, reject) => {
     let unsubscribe = () => {};
