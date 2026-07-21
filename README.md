@@ -1,6 +1,6 @@
 # Agent Attention for Stream Deck
 
-Agent Attention turns the six keys on a Stream Deck Mini into live indicators for three local Codex tasks and three Claude Code Desktop sessions on macOS. Glance at the deck to see which agents are working, waiting for you, or ready to review, then press a key to open the relevant app.
+Agent Attention turns Stream Deck keys into live indicators for local Codex tasks and Claude Code Desktop sessions on macOS. Add as many copies of either reusable action as your device and layout allow, then glance at the deck to see which agents are working, waiting for you, or ready to review.
 
 This is an unofficial personal integration and is not published or endorsed by Anthropic, OpenAI, or Elgato. Claude, Codex, and their icons are trademarks or assets of their respective owners.
 
@@ -14,7 +14,7 @@ This is an unofficial personal integration and is not published or endorsed by A
 | Amber pulse | `INPUT` | An agent is waiting for input or a permission decision |
 | Red pulse | `ERROR` | A task failed or was aborted |
 
-Tasks keep stable physical slots while they remain among the three most important tasks for that agent. When more than three tasks are active, the visible set is chosen by error, input, ready, working, then recency. An urgent task displaces the least important visible task; empty slots show idle.
+Each visible action copy becomes a task lane. Tasks keep stable physical keys while they remain among the most important tasks that fit on the available keys. When more tasks are active than keys exist, the visible set is chosen by error, input, ready, working, then recency. An urgent task displaces the least important visible task; extra keys show idle.
 
 Recommended Stream Deck Mini layout:
 
@@ -40,10 +40,12 @@ npm run build
 npm run pack
 ```
 
-Double-click `com.onemoremichael.codex-attention.streamDeckPlugin`, restart Stream Deck if prompted, then add all six numbered actions:
+Double-click `com.onemoremichael.codex-attention.streamDeckPlugin`, restart Stream Deck if prompted, then drag either reusable action onto as many keys as you want:
 
-- **Codex Attention → Codex Task 1–3**
-- **Codex Attention → Claude Task 1–3**
+- **Codex Attention → Codex Task**
+- **Codex Attention → Claude Task**
+
+When upgrading from version 0.3.x, the former Task 1 placements become the reusable actions automatically. Remove old Task 2/3 placements and replace them with additional copies of the reusable action.
 
 For Claude Code Desktop, install the metadata-only lifecycle hooks once:
 

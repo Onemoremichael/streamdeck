@@ -16,8 +16,8 @@ import { CodexJournalWatcher } from "./watcher.js";
 
 const journalWatcher = new CodexJournalWatcher(join(homedir(), ".codex", "sessions"));
 const claudeWatcher = new ClaudeStateWatcher(join(homedir(), ".claude", "stream-deck", "state"));
-const codexLanes = new StableLaneBoard<ThreadState>(3);
-const claudeLanes = new StableLaneBoard<ClaudeThreadState>(3);
+const codexLanes = new StableLaneBoard<ThreadState>();
+const claudeLanes = new StableLaneBoard<ClaudeThreadState>();
 const CODEX_ICON = readFileSync(new URL("../imgs/action-icon.png", import.meta.url)).toString("base64");
 const CLAUDE_ICON = readFileSync(new URL("../imgs/claude-action-icon.png", import.meta.url)).toString(
   "base64"
@@ -38,28 +38,29 @@ abstract class AgentSlotAction<T extends ThreadState> extends SingletonAction {
 
   protected constructor(
     private readonly board: StableLaneBoard<T>,
-    private readonly slot: number,
     private readonly icon: string
   ) {
     super();
     board.subscribe(() => void this.renderAll());
     this.timer = setInterval(() => {
       this.pulseBright = !this.pulseBright;
-      if (this.state && this.state.status !== "idle") void this.renderAll();
+      if ([...this.visible.keys()].some((slotId) => this.board.get(slotId))) void this.renderAll();
     }, 650);
-  }
-
-  protected get state(): T | null {
-    return this.board.get(this.slot);
   }
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
     this.visible.set(ev.action.id, ev.action);
+    this.board.addSlot(ev.action.id);
     await this.render(ev.action);
   }
 
   override onWillDisappear(ev: WillDisappearEvent): void {
     this.visible.delete(ev.action.id);
+    this.board.removeSlot(ev.action.id);
+  }
+
+  protected stateFor(ev: KeyDownEvent): T | null {
+    return this.board.get(ev.action.id);
   }
 
   protected open(target: string[], ev: KeyDownEvent): void {
@@ -74,74 +75,47 @@ abstract class AgentSlotAction<T extends ThreadState> extends SingletonAction {
   }
 
   private async render(target: WillAppearEvent["action"]): Promise<void> {
-    const status = this.state?.status ?? "idle";
+    const status = this.board.get(target.id)?.status ?? "idle";
     await target.setImage(makeKeySvg(status, this.pulseBright, this.icon));
     await target.setTitle("");
   }
 }
 
 abstract class CodexSlotAction extends AgentSlotAction<ThreadState> {
-  protected constructor(slot: number) {
-    super(codexLanes, slot, CODEX_ICON);
+  protected constructor() {
+    super(codexLanes, CODEX_ICON);
   }
 
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
-    const threadId = this.state?.id;
+    const threadId = this.stateFor(ev)?.id;
     this.open([threadId ? `codex://threads/${threadId}` : "/Applications/ChatGPT.app"], ev);
     if (threadId) journalWatcher.acknowledge(threadId);
   }
 }
 
 abstract class ClaudeSlotAction extends AgentSlotAction<ClaudeThreadState> {
-  protected constructor(slot: number) {
-    super(claudeLanes, slot, CLAUDE_ICON);
+  protected constructor() {
+    super(claudeLanes, CLAUDE_ICON);
   }
 
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
+    const state = this.stateFor(ev);
     this.open(["-a", "Claude"], ev);
-    if (this.state) await claudeWatcher.acknowledge(this.state.id);
+    if (state) await claudeWatcher.acknowledge(state.id);
   }
 }
 
 @action({ UUID: "com.onemoremichael.codex-attention.priority" })
-class CodexSlotOneAction extends CodexSlotAction {
+class CodexTaskAction extends CodexSlotAction {
   constructor() {
-    super(0);
-  }
-}
-
-@action({ UUID: "com.onemoremichael.codex-attention.priority-2" })
-class CodexSlotTwoAction extends CodexSlotAction {
-  constructor() {
-    super(1);
-  }
-}
-
-@action({ UUID: "com.onemoremichael.codex-attention.priority-3" })
-class CodexSlotThreeAction extends CodexSlotAction {
-  constructor() {
-    super(2);
+    super();
   }
 }
 
 @action({ UUID: "com.onemoremichael.codex-attention.claude-priority" })
-class ClaudeSlotOneAction extends ClaudeSlotAction {
+class ClaudeTaskAction extends ClaudeSlotAction {
   constructor() {
-    super(0);
-  }
-}
-
-@action({ UUID: "com.onemoremichael.codex-attention.claude-priority-2" })
-class ClaudeSlotTwoAction extends ClaudeSlotAction {
-  constructor() {
-    super(1);
-  }
-}
-
-@action({ UUID: "com.onemoremichael.codex-attention.claude-priority-3" })
-class ClaudeSlotThreeAction extends ClaudeSlotAction {
-  constructor() {
-    super(2);
+    super();
   }
 }
 
@@ -165,12 +139,8 @@ function makeKeySvg(status: CodexStatus, bright: boolean, icon: string): string 
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-streamDeck.actions.registerAction(new CodexSlotOneAction());
-streamDeck.actions.registerAction(new CodexSlotTwoAction());
-streamDeck.actions.registerAction(new CodexSlotThreeAction());
-streamDeck.actions.registerAction(new ClaudeSlotOneAction());
-streamDeck.actions.registerAction(new ClaudeSlotTwoAction());
-streamDeck.actions.registerAction(new ClaudeSlotThreeAction());
+streamDeck.actions.registerAction(new CodexTaskAction());
+streamDeck.actions.registerAction(new ClaudeTaskAction());
 
 journalWatcher.subscribe(() => codexLanes.update(journalWatcher.states.values()));
 claudeWatcher.subscribe(() => claudeLanes.update(claudeWatcher.states.values()));
