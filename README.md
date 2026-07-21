@@ -45,8 +45,6 @@ Double-click `com.onemoremichael.codex-attention.streamDeckPlugin`, restart Stre
 - **Codex Attention → Codex Task**
 - **Codex Attention → Claude Task**
 
-When upgrading from version 0.3.x, the former Task 1 placements become the reusable actions automatically. Remove old Task 2/3 placements and replace them with additional copies of the reusable action.
-
 For Claude Code Desktop, install the metadata-only lifecycle hooks once:
 
 ```sh
