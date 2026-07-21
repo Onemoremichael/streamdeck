@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "SDKVersion": 2,
+  "Author": "Onemoremichael",
+  "UUID": "com.onemoremichael.codex-attention",
+  "CodePath": "bin/plugin.js",
+  "Name": "Codex Attention",
+  "Description": "A Codex priority key that pulses when a local task is working, ready, waiting for input, or blocked.",
+  "Icon": "imgs/plugin-icon",
+  "Category": "Codex Attention",
+  "CategoryIcon": "imgs/plugin-icon",
+  "Version": "0.1.0.0",
+  "Software": {
+    "MinimumVersion": "7.1"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "13"
+    }
+  ],
+  "Nodejs": {
+    "Version": "24"
+  },
+  "Actions": [
+    {
+      "UUID": "com.onemoremichael.codex-attention.priority",
+      "Name": "Priority Task",
+      "Tooltip": "Show and open the highest-priority local Codex task.",
+      "Icon": "imgs/action-icon",
+      "States": [
+        {
+          "Image": "imgs/action-icon",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    }
+  ]
+}
