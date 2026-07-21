@@ -1,6 +1,6 @@
 # Agent Attention for Stream Deck
 
-Agent Attention turns Stream Deck keys into live priority indicators for local Codex and Claude Code Desktop tasks on macOS. It mirrors the single-key workflow of Codex Micro: glance at a key to see whether an agent is working, waiting for you, or ready to review, then press it to open the relevant app.
+Agent Attention turns the six keys on a Stream Deck Mini into live indicators for three local Codex tasks and three Claude Code Desktop sessions on macOS. Glance at the deck to see which agents are working, waiting for you, or ready to review, then press a key to open the relevant app.
 
 This is an unofficial personal integration and is not published or endorsed by Anthropic, OpenAI, or Elgato. Claude, Codex, and their icons are trademarks or assets of their respective owners.
 
@@ -14,7 +14,14 @@ This is an unofficial personal integration and is not published or endorsed by A
 | Amber pulse | `INPUT` | An agent is waiting for input or a permission decision |
 | Red pulse | `ERROR` | A task failed or was aborted |
 
-When several tasks are active, each agent key shows its most urgent state: error, input, ready, working, then idle. Ties go to the most recently updated task.
+Tasks keep stable physical slots while they remain among the three most important tasks for that agent. When more than three tasks are active, the visible set is chosen by error, input, ready, working, then recency. An urgent task displaces the least important visible task; empty slots show idle.
+
+Recommended Stream Deck Mini layout:
+
+```text
+Codex 1    Codex 2    Codex 3
+Claude 1   Claude 2   Claude 3
+```
 
 ## Install
 
@@ -33,10 +40,10 @@ npm run build
 npm run pack
 ```
 
-Double-click `com.onemoremichael.codex-attention.streamDeckPlugin`, restart Stream Deck if prompted, then add either action:
+Double-click `com.onemoremichael.codex-attention.streamDeckPlugin`, restart Stream Deck if prompted, then add all six numbered actions:
 
-- **Codex Attention → Priority Task**
-- **Codex Attention → Claude Code Priority**
+- **Codex Attention → Codex Task 1–3**
+- **Codex Attention → Claude Task 1–3**
 
 For Claude Code Desktop, install the metadata-only lifecycle hooks once:
 
@@ -55,7 +62,7 @@ npx streamdeck restart com.onemoremichael.codex-attention
 
 ## Codex behavior
 
-Pressing the Codex key opens the highest-priority task in the signed ChatGPT/Codex desktop app through its `codex://threads/...` deep link. Pressing a ready or error key also acknowledges that notification and returns it to idle.
+Pressing a Codex key opens the exact task displayed on that key in the signed ChatGPT/Codex desktop app through its `codex://threads/...` deep link. Pressing a ready or error key also acknowledges that notification and frees its slot for another task.
 
 The watcher follows recently modified Codex session journals and polls known journals every 500 ms to accommodate macOS file-event behavior. It recognizes:
 
@@ -83,7 +90,7 @@ Claude Code exposes official lifecycle hooks, so its action does not infer statu
 
 The hook writes only session ID, status, timestamp, working directory, and transcript path to `~/.claude/stream-deck/state/`. It never copies prompts, responses, command text, or permission contents. The Stream Deck plugin watches these small state files locally.
 
-Pressing the Claude key foregrounds Claude Desktop and acknowledges ready or error status. Claude Desktop registers the `claude://` scheme, but Anthropic does not currently document a stable per-session desktop deep link, so the plugin intentionally avoids guessing one.
+Pressing a Claude key foregrounds Claude Desktop and acknowledges the session displayed on that key when it is ready or in error. Claude Desktop registers the `claude://` scheme, but Anthropic does not currently document a stable per-session desktop deep link, so the plugin intentionally avoids guessing one.
 
 ## Privacy
 

@@ -10,13 +10,14 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { ClaudeStateWatcher, type ClaudeThreadState } from "./claude-watcher.js";
-import { CodexJournalWatcher } from "./watcher.js";
+import { StableLaneBoard } from "./lanes.js";
 import type { CodexStatus, ThreadState } from "./status.js";
+import { CodexJournalWatcher } from "./watcher.js";
 
-const CODEX_ACTION_UUID = "com.onemoremichael.codex-attention.priority";
-const CLAUDE_ACTION_UUID = "com.onemoremichael.codex-attention.claude-priority";
 const journalWatcher = new CodexJournalWatcher(join(homedir(), ".codex", "sessions"));
 const claudeWatcher = new ClaudeStateWatcher(join(homedir(), ".claude", "stream-deck", "state"));
+const codexLanes = new StableLaneBoard<ThreadState>(3);
+const claudeLanes = new StableLaneBoard<ClaudeThreadState>(3);
 const CODEX_ICON = readFileSync(new URL("../imgs/action-icon.png", import.meta.url)).toString("base64");
 const CLAUDE_ICON = readFileSync(new URL("../imgs/claude-action-icon.png", import.meta.url)).toString(
   "base64"
@@ -30,24 +31,26 @@ const COLORS: Record<CodexStatus, { glow: string; label: string }> = {
   error: { glow: "#EF4444", label: "ERROR" }
 };
 
-@action({ UUID: CODEX_ACTION_UUID })
-class CodexPriorityAction extends SingletonAction {
-  private state: ThreadState | null = null;
-  private visible = new Map<string, WillAppearEvent["action"]>();
+abstract class AgentSlotAction<T extends ThreadState> extends SingletonAction {
+  private readonly visible = new Map<string, WillAppearEvent["action"]>();
   private pulseBright = true;
-  private timer: NodeJS.Timeout | null = null;
-  private unsubscribe: (() => void) | null = null;
+  private readonly timer: NodeJS.Timeout;
 
-  constructor() {
+  protected constructor(
+    private readonly board: StableLaneBoard<T>,
+    private readonly slot: number,
+    private readonly icon: string
+  ) {
     super();
-    this.unsubscribe = journalWatcher.subscribe((state) => {
-      this.state = state;
-      void this.renderAll();
-    });
+    board.subscribe(() => void this.renderAll());
     this.timer = setInterval(() => {
       this.pulseBright = !this.pulseBright;
-      if (this.state?.status !== "idle") void this.renderAll();
+      if (this.state && this.state.status !== "idle") void this.renderAll();
     }, 650);
+  }
+
+  protected get state(): T | null {
+    return this.board.get(this.slot);
   }
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
@@ -59,16 +62,11 @@ class CodexPriorityAction extends SingletonAction {
     this.visible.delete(ev.action.id);
   }
 
-  override async onKeyDown(ev: KeyDownEvent): Promise<void> {
-    const threadId = this.state?.id;
-    const target = threadId ? `codex://threads/${threadId}` : "/Applications/ChatGPT.app";
-
-    execFile("/usr/bin/open", [target], (error) => {
+  protected open(target: string[], ev: KeyDownEvent): void {
+    execFile("/usr/bin/open", target, (error) => {
       if (error) void ev.action.showAlert();
       else void ev.action.showOk();
     });
-
-    if (threadId) journalWatcher.acknowledge(threadId);
   }
 
   private async renderAll(): Promise<void> {
@@ -77,56 +75,73 @@ class CodexPriorityAction extends SingletonAction {
 
   private async render(target: WillAppearEvent["action"]): Promise<void> {
     const status = this.state?.status ?? "idle";
-    await target.setImage(makeKeySvg(status, this.pulseBright, CODEX_ICON));
+    await target.setImage(makeKeySvg(status, this.pulseBright, this.icon));
     await target.setTitle("");
   }
 }
 
-@action({ UUID: CLAUDE_ACTION_UUID })
-class ClaudePriorityAction extends SingletonAction {
-  private state: ClaudeThreadState | null = null;
-  private visible = new Map<string, WillAppearEvent["action"]>();
-  private pulseBright = true;
-  private timer: NodeJS.Timeout;
-
-  constructor() {
-    super();
-    claudeWatcher.subscribe((state) => {
-      this.state = state;
-      void this.renderAll();
-    });
-    this.timer = setInterval(() => {
-      this.pulseBright = !this.pulseBright;
-      if (this.state?.status !== "idle") void this.renderAll();
-    }, 650);
-  }
-
-  override async onWillAppear(ev: WillAppearEvent): Promise<void> {
-    this.visible.set(ev.action.id, ev.action);
-    await this.render(ev.action);
-  }
-
-  override onWillDisappear(ev: WillDisappearEvent): void {
-    this.visible.delete(ev.action.id);
+abstract class CodexSlotAction extends AgentSlotAction<ThreadState> {
+  protected constructor(slot: number) {
+    super(codexLanes, slot, CODEX_ICON);
   }
 
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
-    execFile("/usr/bin/open", ["-a", "Claude"], (error) => {
-      if (error) void ev.action.showAlert();
-      else void ev.action.showOk();
-    });
+    const threadId = this.state?.id;
+    this.open([threadId ? `codex://threads/${threadId}` : "/Applications/ChatGPT.app"], ev);
+    if (threadId) journalWatcher.acknowledge(threadId);
+  }
+}
 
+abstract class ClaudeSlotAction extends AgentSlotAction<ClaudeThreadState> {
+  protected constructor(slot: number) {
+    super(claudeLanes, slot, CLAUDE_ICON);
+  }
+
+  override async onKeyDown(ev: KeyDownEvent): Promise<void> {
+    this.open(["-a", "Claude"], ev);
     if (this.state) await claudeWatcher.acknowledge(this.state.id);
   }
+}
 
-  private async renderAll(): Promise<void> {
-    await Promise.all([...this.visible.values()].map((item) => this.render(item)));
+@action({ UUID: "com.onemoremichael.codex-attention.priority" })
+class CodexSlotOneAction extends CodexSlotAction {
+  constructor() {
+    super(0);
   }
+}
 
-  private async render(target: WillAppearEvent["action"]): Promise<void> {
-    const status = this.state?.status ?? "idle";
-    await target.setImage(makeKeySvg(status, this.pulseBright, CLAUDE_ICON));
-    await target.setTitle("");
+@action({ UUID: "com.onemoremichael.codex-attention.priority-2" })
+class CodexSlotTwoAction extends CodexSlotAction {
+  constructor() {
+    super(1);
+  }
+}
+
+@action({ UUID: "com.onemoremichael.codex-attention.priority-3" })
+class CodexSlotThreeAction extends CodexSlotAction {
+  constructor() {
+    super(2);
+  }
+}
+
+@action({ UUID: "com.onemoremichael.codex-attention.claude-priority" })
+class ClaudeSlotOneAction extends ClaudeSlotAction {
+  constructor() {
+    super(0);
+  }
+}
+
+@action({ UUID: "com.onemoremichael.codex-attention.claude-priority-2" })
+class ClaudeSlotTwoAction extends ClaudeSlotAction {
+  constructor() {
+    super(1);
+  }
+}
+
+@action({ UUID: "com.onemoremichael.codex-attention.claude-priority-3" })
+class ClaudeSlotThreeAction extends ClaudeSlotAction {
+  constructor() {
+    super(2);
   }
 }
 
@@ -150,8 +165,15 @@ function makeKeySvg(status: CodexStatus, bright: boolean, icon: string): string 
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-streamDeck.actions.registerAction(new CodexPriorityAction());
-streamDeck.actions.registerAction(new ClaudePriorityAction());
+streamDeck.actions.registerAction(new CodexSlotOneAction());
+streamDeck.actions.registerAction(new CodexSlotTwoAction());
+streamDeck.actions.registerAction(new CodexSlotThreeAction());
+streamDeck.actions.registerAction(new ClaudeSlotOneAction());
+streamDeck.actions.registerAction(new ClaudeSlotTwoAction());
+streamDeck.actions.registerAction(new ClaudeSlotThreeAction());
+
+journalWatcher.subscribe(() => codexLanes.update(journalWatcher.states.values()));
+claudeWatcher.subscribe(() => claudeLanes.update(claudeWatcher.states.values()));
 
 // Stream Deck expects plugins to connect promptly. Start the journal scan in
 // the background so a large Codex history cannot trigger its startup timeout.

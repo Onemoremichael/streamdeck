@@ -5,11 +5,11 @@
   "UUID": "com.onemoremichael.codex-attention",
   "CodePath": "bin/plugin.js",
   "Name": "Codex Attention",
-  "Description": "Priority keys for local Codex and Claude Code tasks.",
+  "Description": "Six live status keys for local Codex and Claude Code tasks.",
   "Icon": "imgs/plugin-icon",
   "Category": "Codex Attention",
   "CategoryIcon": "imgs/plugin-icon",
-  "Version": "0.2.0.0",
+  "Version": "0.3.0.0",
   "Software": {
     "MinimumVersion": "7.1"
   },
@@ -25,8 +25,32 @@
   "Actions": [
     {
       "UUID": "com.onemoremichael.codex-attention.priority",
-      "Name": "Priority Task",
-      "Tooltip": "Show and open the highest-priority local Codex task.",
+      "Name": "Codex Task 1",
+      "Tooltip": "Show and open the Codex task assigned to slot 1.",
+      "Icon": "imgs/action-icon",
+      "States": [
+        {
+          "Image": "imgs/action-icon",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "UUID": "com.onemoremichael.codex-attention.priority-2",
+      "Name": "Codex Task 2",
+      "Tooltip": "Show and open the Codex task assigned to slot 2.",
+      "Icon": "imgs/action-icon",
+      "States": [
+        {
+          "Image": "imgs/action-icon",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "UUID": "com.onemoremichael.codex-attention.priority-3",
+      "Name": "Codex Task 3",
+      "Tooltip": "Show and open the Codex task assigned to slot 3.",
       "Icon": "imgs/action-icon",
       "States": [
         {
@@ -37,8 +61,32 @@
     },
     {
       "UUID": "com.onemoremichael.codex-attention.claude-priority",
-      "Name": "Claude Code Priority",
-      "Tooltip": "Show Claude Code status and open Claude Desktop.",
+      "Name": "Claude Task 1",
+      "Tooltip": "Show the Claude Code session assigned to slot 1 and open Claude Desktop.",
+      "Icon": "imgs/claude-action-icon",
+      "States": [
+        {
+          "Image": "imgs/claude-action-icon",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "UUID": "com.onemoremichael.codex-attention.claude-priority-2",
+      "Name": "Claude Task 2",
+      "Tooltip": "Show the Claude Code session assigned to slot 2 and open Claude Desktop.",
+      "Icon": "imgs/claude-action-icon",
+      "States": [
+        {
+          "Image": "imgs/claude-action-icon",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "UUID": "com.onemoremichael.codex-attention.claude-priority-3",
+      "Name": "Claude Task 3",
+      "Tooltip": "Show the Claude Code session assigned to slot 3 and open Claude Desktop.",
       "Icon": "imgs/claude-action-icon",
       "States": [
         {
